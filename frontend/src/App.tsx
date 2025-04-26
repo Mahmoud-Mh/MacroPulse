@@ -1,11 +1,13 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { WebSocketProvider } from './components/WebSocketManager';
 import { SeriesSelector } from './components/SeriesSelector';
 import { DataVisualizer } from './components/DataVisualizer';
+import { Login } from './components/Login';
 import './App.css';
 
-function App() {
-  // Replace this with your actual token
-  const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ1NjgyOTQxLCJpYXQiOjE3NDU2NzkzNDEsImp0aSI6IjYwMjRlYjZlZjhmZTQwMTA5N2JmODdkMzA1MjczY2MyIiwidXNlcl9pZCI6MzZ9.kiXShTXw73n9wagLp_Np3bUhNTkBqAbR9hd18ZBNhws';
+const Dashboard = () => {
+  const token = localStorage.getItem('access_token');
+  if (!token) return <Navigate to="/login" />;
 
   return (
     <WebSocketProvider token={token}>
@@ -23,6 +25,18 @@ function App() {
         </main>
       </div>
     </WebSocketProvider>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/login" />} />
+      </Routes>
+    </Router>
   );
 }
 
