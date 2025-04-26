@@ -1,90 +1,60 @@
-import json
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
-from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.tokens import AccessToken
-from rest_framework_simplejwt.exceptions import TokenError
-from authentication.token_store import TokenStore
+import json
+from datetime import datetime
+import logging
 
-User = get_user_model()
+logger = logging.getLogger(__name__)
 
 class EconomicDataConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # Get the token from query parameters
-        token = self.scope.get('query_string', b'').decode().split('token=')[-1]
-        
-        if not token:
-            await self.close()
+        """Handle WebSocket connection"""
+        user = self.scope["user"]
+        if user.is_anonymous:
+            logger.warning("Anonymous user attempted to connect")
+            await self.close(code=4401)
             return
             
-        try:
-            # Verify the token exists in our store
-            user_id = await self.get_user_from_token(token)
-            if not user_id:
-                await self.close()
-                return
-                
-            self.user = await self.get_user(user_id)
-            if not self.user:
-                await self.close()
-                return
-                
-            await self.channel_layer.group_add(
-                "economic_data",
-                self.channel_name
-            )
-            await self.accept()
-            
-        except TokenError:
-            await self.close()
-            return
-            
-    @database_sync_to_async
-    def get_user_from_token(self, token):
-        try:
-            # First verify the token is valid
-            access_token = AccessToken(token)
-            # Then check if it exists in our store
-            if TokenStore.validate_token(str(access_token)):
-                return access_token['user_id']
-            return None
-        except TokenError:
-            return None
-            
-    @database_sync_to_async  
-    def get_user(self, user_id):
-        try:
-            return User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return None
+        logger.info(f"WebSocket connection established for user: {user.username}")
+        await self.accept()
+        await self.send_welcome_message(user.username)
 
     async def disconnect(self, close_code):
-        try:
-            await self.channel_layer.group_discard(
-                "economic_data",
-                self.channel_name
-            )
-        except:
-            pass
+        """Handle WebSocket disconnection"""
+        user = self.scope["user"]
+        logger.info(f"WebSocket connection closed for user: {user.username if not user.is_anonymous else 'anonymous'}")
 
     async def receive(self, text_data):
+        """Handle incoming WebSocket messages"""
         try:
-            text_data_json = json.loads(text_data)
-            message = text_data_json['message']
-            
-            await self.channel_layer.group_send(
-                "economic_data",
-                {
-                    'type': 'economic_data_message',
-                    'message': message
-                }
-            )
-        except json.JSONDecodeError:
-            pass
+            data = json.loads(text_data)
+            logger.debug(f"Received message from {self.scope['user'].username}: {data}")
+            await self.handle_message(data)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON received: {str(e)}")
+            await self.send_error("Invalid JSON format")
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}")
+            await self.send_error("Internal server error")
 
-    async def economic_data_message(self, event):
-        message = event['message']
-        
+    async def send_welcome_message(self, username):
         await self.send(text_data=json.dumps({
-            'message': message
-        })) 
+            'type': 'welcome',
+            'message': f'Welcome {username}!',
+            'timestamp': datetime.now().isoformat()
+        }))
+
+    async def handle_message(self, data):
+        response = {
+            'type': 'echo',
+            'content': data,
+            'timestamp': datetime.now().isoformat()
+        }
+        await self.send(text_data=json.dumps(response))
+        logger.debug(f"Sent response to {self.scope['user'].username}")
+
+    async def send_error(self, message):
+        await self.send(text_data=json.dumps({
+            'type': 'error',
+            'message': message,
+            'timestamp': datetime.now().isoformat()
+        }))

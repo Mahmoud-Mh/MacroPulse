@@ -37,6 +37,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # ASGI server
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -55,6 +56,7 @@ INSTALLED_APPS = [
     # Local apps
     'indicators.apps.IndicatorsConfig',
     'authentication.apps.AuthenticationConfig',
+    'websocket.apps.WebsocketConfig',
 ]
 
 MIDDLEWARE = [
@@ -198,24 +200,23 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
     
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    
-    'JTI_CLAIM': 'jti',
 }
 
 # FRED API settings
 FRED_API_KEY = os.getenv('FRED_API_KEY', '46a4f7f6f63c11533490bfdf32039609')
 
-# Channel layers for WebSocket
+# Channels configuration
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
         'CONFIG': {
-            'hosts': [(os.getenv('REDIS_HOST', 'localhost'), 
-                      int(os.getenv('REDIS_PORT', 6379)))],
+            'capacity': 1000,
         },
-    },
+    }
 }
+
+# Add WebSocket allowed hosts
+ALLOWED_HOSTS = ['*']  # For development only, customize for production
 
 # Celery Configuration
 CELERY_BROKER_URL = f"amqp://{os.getenv('RABBITMQ_USER', 'guest')}:{os.getenv('RABBITMQ_PASSWORD', 'guest')}@{os.getenv('RABBITMQ_HOST', 'localhost')}:{os.getenv('RABBITMQ_PORT', '5672')}//"
@@ -226,8 +227,63 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = True  # Only for development
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite default port
-    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "ws://localhost:8000",
+    "ws://127.0.0.1:8000",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        'authentication': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+        'websocket': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
+}
