@@ -30,9 +30,10 @@ urlpatterns = [
     
     # API endpoints
     path('api/', include('indicators.urls')),
+    path('api/auth/', include('authentication.urls')),
     path('api-auth/', include('rest_framework.urls')),
     
-    # API Documentation
+    # API Doc
     path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('api/docs/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('api/schema/', schema_view.without_ui(cache_timeout=0), name='schema-json'),

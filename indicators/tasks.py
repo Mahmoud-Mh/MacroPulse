@@ -12,7 +12,7 @@ def test_fred_connection():
     Test function to verify FRED API connection and data fetching.
     """
     try:
-        # Try to fetch GDP data
+        # Try fetching GDP data
         series_id = 'GDP'
         series_info = fred.get_series_info(series_id)
         series_data = fred.get_series(series_id)
@@ -32,24 +32,27 @@ def test_fred_connection():
 @shared_task(
     bind=True,
     max_retries=3,
-    default_retry_delay=300,  # 5 minutes
+    default_retry_delay=300,  # 5 min
 )
 def update_indicator(self, series_id, country="US"):
     """
     Update a single indicator from FRED API.
     """
     try:
+        print(f"Fetching data for {series_id}")
         # Get series information
         series_info = fred.get_series_info(series_id)
         series_data = fred.get_series(series_id)
         
         if series_data.empty:
-            logger.warning(f"No data found for series {series_id}")
+            print(f"No data found for series {series_id}")
             return
         
         # Get the latest data point
         latest_value = series_data.iloc[-1]
         latest_date = series_data.index[-1]
+        
+        print(f"Got data for {series_id}: {latest_value} as of {latest_date}")
         
         indicator, created = Indicator.objects.update_or_create(
             name=series_info.title,
@@ -61,22 +64,23 @@ def update_indicator(self, series_id, country="US"):
                 'frequency': series_info.frequency,
                 'description': series_info.notes,
                 'last_update': latest_date,
+                'source': 'FRED'
             }
         )
         
-        logger.info(f"Successfully updated {series_info.title}")
+        print(f"{'Created' if created else 'Updated'} indicator: {indicator}")
         return True
         
     except Exception as exc:
-        logger.error(f"Error updating series {series_id}: {exc}")
-        self.retry(exc=exc)
+        print(f"Error updating series {series_id}: {exc}")
+        raise exc
 
 @shared_task
 def update_all_indicators():
     """
     Update all common FRED indicators.
     """
-    # List of important economic indicators from FRED
+    # List of economic indicators from FRED
     INDICATORS = {
         'GDP': 'GDP',
         'Unemployment Rate': 'UNRATE',
@@ -91,7 +95,10 @@ def update_all_indicators():
     }
     
     for name, series_id in INDICATORS.items():
-        update_indicator.delay(series_id=series_id)
+        try:
+            update_indicator(series_id=series_id)
+        except Exception as e:
+            logger.error(f"Error updating {name}: {e}")
     
-    logger.info(f"Scheduled updates for {len(INDICATORS)} indicators")
+    logger.info(f"Updated {len(INDICATORS)} indicators")
     return True 
