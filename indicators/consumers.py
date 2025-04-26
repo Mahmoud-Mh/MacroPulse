@@ -3,6 +3,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Indicator
 from .serializers import IndicatorListSerializer
+from django.contrib.auth.models import AnonymousUser
 
 
 class IndicatorConsumer(AsyncWebsocketConsumer):
@@ -10,14 +11,20 @@ class IndicatorConsumer(AsyncWebsocketConsumer):
         """
         Called when the websocket is handshaking as part of initial connection.
         """
-        # Join indicators group
+        # Check if user is authenticated
+        if isinstance(self.scope["user"], AnonymousUser):
+            await self.close(code=4001)  # Custom close code for unauthorized
+            return
+
+        # Join indicators group with user-specific group name
+        self.group_name = f"indicators_{self.scope['user'].id}"
         await self.channel_layer.group_add(
-            "indicators",
+            self.group_name,
             self.channel_name
         )
         await self.accept()
         
-        # Send initial data
+        # Send init data
         indicators = await self.get_latest_indicators()
         await self.send(text_data=json.dumps({
             'type': 'initial_data',
@@ -29,10 +36,11 @@ class IndicatorConsumer(AsyncWebsocketConsumer):
         Called when the WebSocket closes for any reason.
         """
         # Leave indicators group
-        await self.channel_layer.group_discard(
-            "indicators",
-            self.channel_name
-        )
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
 
     async def receive(self, text_data):
         """
@@ -47,6 +55,11 @@ class IndicatorConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps({
                     'type': 'latest_indicators',
                     'indicators': indicators
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'message': 'Unknown command'
                 }))
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
@@ -69,6 +82,7 @@ class IndicatorConsumer(AsyncWebsocketConsumer):
         """
         Get the latest indicators from the database.
         """
+        # Add user-specific filtering if needed
         indicators = Indicator.objects.all().order_by('-last_update')[:10]
         serializer = IndicatorListSerializer(indicators, many=True)
         return serializer.data 
