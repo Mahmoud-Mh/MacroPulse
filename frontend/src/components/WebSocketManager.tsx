@@ -18,20 +18,24 @@ export const useWebSocket = () => {
 
 interface WebSocketProviderProps {
   children: ReactNode;
-  token: string;
 }
 
-export const WebSocketProvider = ({ children, token }: WebSocketProviderProps) => {
+export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [lastMessage, setLastMessage] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState<any>(null);
+  const token = localStorage.getItem('access_token');
 
   useEffect(() => {
+    if (!token) return;
+
     const ws = new WebSocket(`ws://127.0.0.1:8000/ws/economic_data/?token=${token}`);
 
     ws.onopen = () => {
       console.log('WebSocket Connected');
       setIsConnected(true);
+      // Send initial heartbeat
+      ws.send(JSON.stringify({ type: 'heartbeat' }));
     };
 
     ws.onmessage = (event) => {
@@ -54,7 +58,15 @@ export const WebSocketProvider = ({ children, token }: WebSocketProviderProps) =
 
     setSocket(ws);
 
+    // Set up heartbeat interval
+    const heartbeatInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'heartbeat' }));
+      }
+    }, 30000); // Send heartbeat every 30 seconds
+
     return () => {
+      clearInterval(heartbeatInterval);
       ws.close();
     };
   }, [token]);

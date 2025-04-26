@@ -202,8 +202,10 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
 
-# FRED API settings
-FRED_API_KEY = os.getenv('FRED_API_KEY', 'your_fred_api_key_here')
+# FRED API Settings
+FRED_API_KEY = os.getenv('FRED_API_KEY')
+if not FRED_API_KEY:
+    raise ValueError("FRED_API_KEY environment variable is not set")
 
 # Channels configuration
 CHANNEL_LAYERS = {

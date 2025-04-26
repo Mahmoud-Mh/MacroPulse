@@ -211,3 +211,45 @@ button[type="submit"] {
 button[type="submit"]:hover {
   background-color: #34495e;
 }
+
+.chart-controls {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  color: #2c3e50;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.chart-selector {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 0.9rem;
+  color: #2c3e50;
+  min-width: 120px;
+}
+
+.chart-selector:focus {
+  outline: none;
+  border-color: #2c3e50;
+}
+
+.control-group input[type="checkbox"] {
+  margin-right: 0.5rem;
+}

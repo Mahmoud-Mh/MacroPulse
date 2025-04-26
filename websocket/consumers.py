@@ -48,6 +48,14 @@ class EconomicDataConsumer(AsyncWebsocketConsumer):
         """Handle different types of economic data requests"""
         message_type = data.get('type')
         
+        if message_type == 'heartbeat':
+            # Acknowledge heartbeat
+            await self.send(text_data=json.dumps({
+                'type': 'heartbeat_ack',
+                'timestamp': datetime.now().isoformat()
+            }))
+            return
+            
         if message_type == 'get_series':
             series_id = data.get('series_id')
             if not series_id:
@@ -57,6 +65,7 @@ class EconomicDataConsumer(AsyncWebsocketConsumer):
             try:
                 fred_api = FREDAPI()
                 series_data = await fred_api.get_series(series_id)
+                logger.info(f"FRED API response for series {series_id}: {series_data}")
                 await self.send(text_data=json.dumps({
                     'type': 'series_data',
                     'series_id': series_id,
