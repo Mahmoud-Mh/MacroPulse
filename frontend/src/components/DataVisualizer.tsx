@@ -22,7 +22,8 @@ import {
   Cell,
   PolarGrid,
   PolarAngleAxis,
-  PolarRadiusAxis
+  PolarRadiusAxis,
+  ReferenceArea,
 } from 'recharts';
 import { useWebSocket } from './WebSocketManager';
 
@@ -249,6 +250,42 @@ const styles = {
   }
 };
 
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  units?: string;
+}
+
+const CustomTooltip = ({ active, payload, label, units }: CustomTooltipProps) => {
+  if (active && payload && payload.length) {
+    const date = new Date(label as string);
+    const formattedDate = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }).format(date);
+
+    return (
+      <div style={{
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        padding: '0.75rem',
+        border: '1px solid #e2e8f0',
+        borderRadius: '0.375rem',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+      }}>
+        <p style={{ margin: '0 0 0.5rem', fontWeight: '500', color: '#1e293b' }}>{formattedDate}</p>
+        {payload.map((entry, index) => (
+          <p key={index} style={{ margin: '0.25rem 0', color: entry.color }}>
+            {entry.name}: {entry.value.toLocaleString()} {units}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export const DataVisualizer = () => {
   const { lastMessage, sendMessage } = useWebSocket();
   const [chartData, setChartData] = useState<DataPoint[]>([]);
@@ -259,6 +296,7 @@ export const DataVisualizer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState<string>('');
   const [units, setUnits] = useState<string>('');
+  const [frequency, setFrequency] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [rawData, setRawData] = useState<DataPoint[]>([]);
   const availableSeries = [
@@ -274,6 +312,10 @@ export const DataVisualizer = () => {
     { id: 'SP500', title: 'S&P 500 Index' },
   ];
   const [filteredSeries, setFilteredSeries] = useState(availableSeries);
+  const [zoomDomain, setZoomDomain] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+  const [selecting, setSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<string | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<string | null>(null);
 
   const handleSearch = (term: string) => {
     setSearchTerm(term);
@@ -301,6 +343,32 @@ export const DataVisualizer = () => {
     setIsLoading(true);
     setError(null);
     sendMessage({ type: 'get_series', series_id: seriesId });
+  };
+
+  const detectFrequency = (data: DataPoint[]): string => {
+    if (data.length < 2) return '';
+    
+    // Sort dates to ensure we're comparing adjacent dates
+    const sortedData = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Check a few pairs to confirm consistency
+    const sampleSize = Math.min(5, data.length - 1);
+    const differences = Array.from({length: sampleSize}, (_, i) => {
+      const curr = new Date(sortedData[i].date);
+      const next = new Date(sortedData[i + 1].date);
+      return Math.round((next.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
+    });
+
+    // Get the most common difference
+    const commonDiff = differences.reduce((a, b) => a + b, 0) / differences.length;
+
+    if (commonDiff <= 1) return 'Daily';
+    if (commonDiff <= 7) return 'Weekly';
+    if (commonDiff >= 28 && commonDiff <= 31) return 'Monthly';
+    if (commonDiff >= 90 && commonDiff <= 92) return 'Quarterly';
+    if (commonDiff >= 365 && commonDiff <= 366) return 'Yearly';
+    
+    return 'Variable';
   };
 
   useEffect(() => {
@@ -346,6 +414,7 @@ export const DataVisualizer = () => {
         // Set title and units from series data
         setTitle(seriesData.title || '');
         setUnits(seriesData.units || '');
+        setFrequency(detectFrequency(data));
       } else {
         console.log('No observations found in series data');
         setError('No data available for this series');
@@ -434,6 +503,7 @@ export const DataVisualizer = () => {
         // Set title and units from series data
         setTitle(seriesData.title || '');
         setUnits(seriesData.units || '');
+        setFrequency(detectFrequency(data));
       } else {
         setError('No data available for this series');
         setIsLoading(false);
@@ -495,48 +565,125 @@ export const DataVisualizer = () => {
     setChartData(filteredData);
   }, [rawData, timeRange, showMovingAverage]);
 
+  const handleMouseDown = (e: any) => {
+    if (!e) return;
+    setSelecting(true);
+    setSelectionStart(e.activeLabel);
+    setSelectionEnd(e.activeLabel);
+  };
+
+  const handleMouseMove = (e: any) => {
+    if (!selecting || !e) return;
+    setSelectionEnd(e.activeLabel);
+  };
+
+  const handleMouseUp = () => {
+    if (!selecting) return;
+    setSelecting(false);
+    if (selectionStart && selectionEnd) {
+      const startDate = new Date(selectionStart);
+      const endDate = new Date(selectionEnd);
+      if (startDate > endDate) {
+        setZoomDomain({ start: selectionEnd, end: selectionStart });
+      } else {
+        setZoomDomain({ start: selectionStart, end: selectionEnd });
+      }
+    }
+    setSelectionStart(null);
+    setSelectionEnd(null);
+  };
+
+  const handleResetZoom = () => {
+    setZoomDomain({ start: null, end: null });
+  };
+
   const renderChart = () => {
     const commonProps = {
       data: chartData,
       margin: { top: 20, right: 30, left: 20, bottom: 5 }
     };
 
+    // Filter data based on zoom domain
+    const displayData = zoomDomain.start && zoomDomain.end
+      ? chartData.filter(d => {
+          const date = new Date(d.date);
+          return date >= new Date(zoomDomain.start!) && date <= new Date(zoomDomain.end!);
+        })
+      : chartData;
+
+    const commonChartProps = {
+      onMouseDown: handleMouseDown,
+      onMouseMove: handleMouseMove,
+      onMouseUp: handleMouseUp,
+      onMouseLeave: handleMouseUp
+    };
+
     switch (chartType) {
       case 'line':
         return (
-          <LineChart {...commonProps}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="value" stroke={COLORS[0]} name="Value" />
-            {showMovingAverage && (
-              <Line type="monotone" dataKey="movingAverage" stroke={COLORS[1]} name="Moving Average" />
-            )}
-          </LineChart>
+          <div style={{ width: '100%', height: '100%' }}>
+            <ResponsiveContainer>
+              <LineChart {...commonProps} {...commonChartProps} data={displayData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                />
+                <YAxis />
+                <Tooltip content={<CustomTooltip units={units} />} />
+                <Legend />
+                <Line type="monotone" dataKey="value" stroke={COLORS[0]} name="Value" dot={false} />
+                {showMovingAverage && (
+                  <Line type="monotone" dataKey="movingAverage" stroke={COLORS[1]} name="Moving Average" dot={false} />
+                )}
+                {selecting && selectionStart && selectionEnd && (
+                  <ReferenceArea
+                    x1={selectionStart}
+                    x2={selectionEnd}
+                    strokeOpacity={0.3}
+                    fill="#3b82f6"
+                    fillOpacity={0.3}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         );
       case 'bar':
         return (
-          <BarChart {...commonProps}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="value" fill={COLORS[2]} name="Value" />
-          </BarChart>
+          <div style={{ width: '100%', height: '100%' }}>
+            <ResponsiveContainer>
+              <BarChart {...commonProps} {...commonChartProps} data={displayData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                />
+                <YAxis />
+                <Tooltip content={<CustomTooltip units={units} />} />
+                <Legend />
+                <Bar dataKey="value" fill={COLORS[2]} name="Value" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
       case 'area':
         return (
-          <AreaChart {...commonProps}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Area type="monotone" dataKey="value" stroke={COLORS[3]} fill={COLORS[3]} name="Value" />
-          </AreaChart>
+          <div style={{ width: '100%', height: '100%' }}>
+            <ResponsiveContainer>
+              <AreaChart {...commonProps} {...commonChartProps} data={displayData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                />
+                <YAxis />
+                <Tooltip content={<CustomTooltip units={units} />} />
+                <Legend />
+                <Area type="monotone" dataKey="value" stroke={COLORS[3]} fill={COLORS[3]} name="Value" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         );
       case 'composed':
         return (
@@ -638,6 +785,19 @@ export const DataVisualizer = () => {
             <h2 style={styles.visualizationTitle}>
               {title || 'Select a dataset to visualize'}
               {units && <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({units})</span>}
+              {frequency && (
+                <span style={{
+                  fontSize: '0.75rem',
+                  color: '#fff',
+                  backgroundColor: '#3b82f6',
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '9999px',
+                  marginLeft: '0.75rem',
+                  fontWeight: '500',
+                }}>
+                  {frequency} Data
+                </span>
+              )}
             </h2>
           </div>
 
@@ -687,6 +847,104 @@ export const DataVisualizer = () => {
                 />
                 <span style={styles.label}>Show Moving Average</span>
               </label>
+            </div>
+
+            <div style={styles.controlGroup}>
+              <label style={styles.label}>Zoom</label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button
+                  onClick={() => {
+                    if (!chartData.length) return;
+                    const startDate = new Date(chartData[0].date);
+                    const endDate = new Date(chartData[chartData.length - 1].date);
+                    const range = endDate.getTime() - startDate.getTime();
+                    const zoomStart = new Date(endDate.getTime() - (range * 0.1));
+                    setZoomDomain({ 
+                      start: zoomStart.toISOString().split('T')[0], 
+                      end: endDate.toISOString().split('T')[0] 
+                    });
+                  }}
+                  style={{
+                    padding: '0.5rem',
+                    backgroundColor: '#6366f1',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    minWidth: '90px'
+                  }}
+                >
+                  Last 10%
+                </button>
+                <button
+                  onClick={() => {
+                    if (!chartData.length) return;
+                    const startDate = new Date(chartData[0].date);
+                    const endDate = new Date(chartData[chartData.length - 1].date);
+                    const range = endDate.getTime() - startDate.getTime();
+                    const zoomStart = new Date(endDate.getTime() - (range * 0.3));
+                    setZoomDomain({ 
+                      start: zoomStart.toISOString().split('T')[0], 
+                      end: endDate.toISOString().split('T')[0] 
+                    });
+                  }}
+                  style={{
+                    padding: '0.5rem',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    minWidth: '90px'
+                  }}
+                >
+                  Last 30%
+                </button>
+                <button
+                  onClick={() => {
+                    if (!chartData.length) return;
+                    const startDate = new Date(chartData[0].date);
+                    const endDate = new Date(chartData[chartData.length - 1].date);
+                    const range = endDate.getTime() - startDate.getTime();
+                    const zoomStart = new Date(endDate.getTime() - (range * 0.5));
+                    setZoomDomain({ 
+                      start: zoomStart.toISOString().split('T')[0], 
+                      end: endDate.toISOString().split('T')[0] 
+                    });
+                  }}
+                  style={{
+                    padding: '0.5rem',
+                    backgroundColor: '#0ea5e9',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    minWidth: '90px'
+                  }}
+                >
+                  Last 50%
+                </button>
+                {zoomDomain.start && (
+                  <button
+                    onClick={handleResetZoom}
+                    style={{
+                      padding: '0.5rem',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '0.375rem',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      minWidth: '70px'
+                    }}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
