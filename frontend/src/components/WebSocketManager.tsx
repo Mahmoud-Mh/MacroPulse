@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 
 interface WebSocketContextType {
   sendMessage: (message: any) => void;
   lastMessage: any;
   isConnected: boolean;
+  isReconnecting: boolean;
+  error: string | null;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -21,66 +23,89 @@ interface WebSocketProviderProps {
 }
 
 export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
-  const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const token = localStorage.getItem('access_token');
+  const reconnectAttempts = useRef(0);
+  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
+  const connect = () => {
     if (!token) return;
+    setError(null);
+    setIsReconnecting(reconnectAttempts.current > 0);
+    const wsInstance = new WebSocket(`ws://127.0.0.1:8000/ws/economic_data/?token=${token}`);
+    wsRef.current = wsInstance;
 
-    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/economic_data/?token=${token}`);
-
-    ws.onopen = () => {
+    wsInstance.onopen = () => {
       console.log('WebSocket Connected');
       setIsConnected(true);
-      // Send initial heartbeat
-      ws.send(JSON.stringify({ type: 'heartbeat' }));
+      setIsReconnecting(false);
+      reconnectAttempts.current = 0;
+      setError(null);
+      wsInstance.send(JSON.stringify({ type: 'heartbeat' }));
     };
 
-    ws.onmessage = (event) => {
+    wsInstance.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         setLastMessage(data);
       } catch (error) {
+        setError('Error parsing WebSocket message');
         console.error('Error parsing WebSocket message:', error);
       }
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket Disconnected');
+    wsInstance.onclose = () => {
       setIsConnected(false);
+      setIsReconnecting(true);
+      setError('WebSocket disconnected. Attempting to reconnect...');
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+      const delay = Math.min(1000 * 2 ** reconnectAttempts.current, 30000);
+      reconnectTimeout.current = setTimeout(() => {
+        reconnectAttempts.current += 1;
+        connect();
+      }, delay);
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket Error:', error);
+    wsInstance.onerror = () => {
+      setError('WebSocket error.');
+      setIsConnected(false);
+      setIsReconnecting(true);
+      wsInstance.close();
     };
 
-    setSocket(ws);
-
-    // Set up heartbeat interval
-    const heartbeatInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'heartbeat' }));
+    heartbeatInterval.current = setInterval(() => {
+      if (wsInstance.readyState === WebSocket.OPEN) {
+        wsInstance.send(JSON.stringify({ type: 'heartbeat' }));
       }
-    }, 30000); // Send heartbeat every 30 seconds
+    }, 30000);
+  };
 
+  useEffect(() => {
+    connect();
     return () => {
-      clearInterval(heartbeatInterval);
-      ws.close();
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+      if (wsRef.current) wsRef.current.close();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const sendMessage = (message: any) => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
     } else {
+      setError('WebSocket is not connected');
       console.error('WebSocket is not connected');
     }
   };
 
   return (
-    <WebSocketContext.Provider value={{ sendMessage, lastMessage, isConnected }}>
+    <WebSocketContext.Provider value={{ sendMessage, lastMessage, isConnected, isReconnecting, error }}>
       {children}
     </WebSocketContext.Provider>
   );

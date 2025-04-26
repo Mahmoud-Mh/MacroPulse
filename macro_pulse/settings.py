@@ -288,3 +288,14 @@ LOGGING = {
         },
     },
 }
+
+# Security headers (local dev: SECURE_* = False, production: True)
+SECURE_HSTS_SECONDS = 0  # 0 for local, 31536000 for production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+SESSION_COOKIE_SECURE = False  # True in production
+CSRF_COOKIE_SECURE = False     # True in production
