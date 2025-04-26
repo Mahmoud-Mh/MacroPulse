@@ -1,6 +1,6 @@
 from django.urls import re_path
-from indicators.consumers import IndicatorConsumer
+from websocket.consumers import EconomicDataConsumer
 
 websocket_urlpatterns = [
-    re_path(r'ws/indicators/$', IndicatorConsumer.as_asgi()),
+    re_path(r'ws/economic-data/$', EconomicDataConsumer.as_asgi()),
 ] 

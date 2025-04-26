@@ -2,6 +2,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 from datetime import datetime
 import logging
+from indicators.fred_api import FREDAPI
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +45,49 @@ class EconomicDataConsumer(AsyncWebsocketConsumer):
         }))
 
     async def handle_message(self, data):
-        response = {
-            'type': 'echo',
-            'content': data,
-            'timestamp': datetime.now().isoformat()
-        }
-        await self.send(text_data=json.dumps(response))
-        logger.debug(f"Sent response to {self.scope['user'].username}")
+        """Handle different types of economic data requests"""
+        message_type = data.get('type')
+        
+        if message_type == 'get_series':
+            series_id = data.get('series_id')
+            if not series_id:
+                await self.send_error("Series ID is required")
+                return
+                
+            try:
+                fred_api = FREDAPI()
+                series_data = await fred_api.get_series(series_id)
+                await self.send(text_data=json.dumps({
+                    'type': 'series_data',
+                    'series_id': series_id,
+                    'data': series_data,
+                    'timestamp': datetime.now().isoformat()
+                }))
+            except Exception as e:
+                logger.error(f"Error fetching series data: {str(e)}")
+                await self.send_error(f"Error fetching series data: {str(e)}")
+                
+        elif message_type == 'search_series':
+            search_term = data.get('search_term')
+            if not search_term:
+                await self.send_error("Search term is required")
+                return
+                
+            try:
+                fred_api = FREDAPI()
+                search_results = await fred_api.search_series(search_term)
+                await self.send(text_data=json.dumps({
+                    'type': 'search_results',
+                    'search_term': search_term,
+                    'results': search_results,
+                    'timestamp': datetime.now().isoformat()
+                }))
+            except Exception as e:
+                logger.error(f"Error searching series: {str(e)}")
+                await self.send_error(f"Error searching series: {str(e)}")
+                
+        else:
+            await self.send_error(f"Unknown message type: {message_type}")
 
     async def send_error(self, message):
         await self.send(text_data=json.dumps({

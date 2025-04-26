@@ -203,20 +203,19 @@ SIMPLE_JWT = {
 }
 
 # FRED API settings
-FRED_API_KEY = os.getenv('FRED_API_KEY', '46a4f7f6f63c11533490bfdf32039609')
+FRED_API_KEY = os.getenv('FRED_API_KEY', 'your_fred_api_key_here')
 
 # Channels configuration
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-        'CONFIG': {
-            'capacity': 1000,
-        },
-    }
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
 }
 
 # Add WebSocket allowed hosts
-ALLOWED_HOSTS = ['*']  # For development only, customize for production
+ALLOWED_HOSTS = ["*"]
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
 CELERY_BROKER_URL = f"amqp://{os.getenv('RABBITMQ_USER', 'guest')}:{os.getenv('RABBITMQ_PASSWORD', 'guest')}@{os.getenv('RABBITMQ_HOST', 'localhost')}:{os.getenv('RABBITMQ_PORT', '5672')}//"
