@@ -101,4 +101,8 @@ def update_all_indicators():
             logger.error(f"Error updating {name}: {e}")
     
     logger.info(f"Updated {len(INDICATORS)} indicators")
-    return True 
+    return True
+
+@shared_task
+def health_check_task():
+    return "ok" 
