@@ -1,30 +1,28 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Dashboard from './components/Dashboard/Dashboard';
-
-const queryClient = new QueryClient();
-
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#90caf9',
-    },
-    secondary: {
-      main: '#f48fb1',
-    },
-  },
-});
+import { WebSocketProvider } from './components/WebSocketManager';
+import { SeriesSelector } from './components/SeriesSelector';
+import { DataVisualizer } from './components/DataVisualizer';
+import './App.css';
 
 function App() {
+  // Replace this with your actual token
+  const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ1NjgyOTQxLCJpYXQiOjE3NDU2NzkzNDEsImp0aSI6IjYwMjRlYjZlZjhmZTQwMTA5N2JmODdkMzA1MjczY2MyIiwidXNlcl9pZCI6MzZ9.kiXShTXw73n9wagLp_Np3bUhNTkBqAbR9hd18ZBNhws';
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Dashboard />
-      </ThemeProvider>
-    </QueryClientProvider>
+    <WebSocketProvider token={token}>
+      <div className="app">
+        <header>
+          <h1>MacroPulse Economic Data</h1>
+        </header>
+        <main>
+          <div className="sidebar">
+            <SeriesSelector />
+          </div>
+          <div className="content">
+            <DataVisualizer />
+          </div>
+        </main>
+      </div>
+    </WebSocketProvider>
   );
 }
 
