@@ -92,11 +92,11 @@ ASGI_APPLICATION = 'macro_pulse.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'macro_pulse'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': 'macro_pulse',
+        'USER': 'postgres',
+        'PASSWORD': 'TAM1234',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
