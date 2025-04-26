@@ -243,6 +243,10 @@ const styles = {
     color: '#64748b',
     fontSize: '0.875rem',
   },
+  '@keyframes spin': {
+    '0%': { transform: 'rotate(0deg)' },
+    '100%': { transform: 'rotate(360deg)' }
+  }
 };
 
 export const DataVisualizer = () => {
@@ -252,6 +256,7 @@ export const DataVisualizer = () => {
   const [timeRange, setTimeRange] = useState<string>('all');
   const [showMovingAverage, setShowMovingAverage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState<string>('');
   const [units, setUnits] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -293,6 +298,8 @@ export const DataVisualizer = () => {
   };
 
   const handleSeriesSelect = (seriesId: string) => {
+    setIsLoading(true);
+    setError(null);
     sendMessage({ type: 'get_series', series_id: seriesId });
   };
 
@@ -395,6 +402,7 @@ export const DataVisualizer = () => {
     if (lastMessage?.type === 'search_results') {
       const apiResults = lastMessage.results || [];
       setFilteredSeries(apiResults);
+      setIsLoading(false);
     } else if (lastMessage?.type === 'series_data') {
       // Extract data from the series_data message
       const seriesData = lastMessage.data;
@@ -402,6 +410,7 @@ export const DataVisualizer = () => {
       if (!seriesData) {
         console.error('No data in series_data message');
         setError('No data received from the server');
+        setIsLoading(false);
         return;
       }
 
@@ -410,6 +419,7 @@ export const DataVisualizer = () => {
         console.error('API error:', seriesData.error);
         setError(seriesData.error);
         setRawData([]);
+        setIsLoading(false);
         return;
       }
 
@@ -426,11 +436,13 @@ export const DataVisualizer = () => {
         setUnits(seriesData.units || '');
       } else {
         setError('No data available for this series');
+        setIsLoading(false);
         return;
       }
 
       if (data.length === 0) {
         setError('No valid data points found for this series');
+        setIsLoading(false);
         return;
       }
 
@@ -438,6 +450,7 @@ export const DataVisualizer = () => {
       // Sort data by date
       data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       setRawData(data);
+      setIsLoading(false);
     }
   }, [lastMessage]);
 
@@ -687,6 +700,25 @@ export const DataVisualizer = () => {
                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
               }}>
                 {error}
+              </div>
+            </div>
+          ) : isLoading ? (
+            <div style={{...styles.chartContainer, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem'
+              }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  border: '3px solid #f3f4f6',
+                  borderTop: '3px solid #3b82f6',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }} />
+                <div style={styles.loadingMessage}>Loading data...</div>
               </div>
             </div>
           ) : chartData.length > 0 ? (
