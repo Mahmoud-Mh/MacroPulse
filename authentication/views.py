@@ -52,6 +52,7 @@ def token_obtain(request):
         return Response({
             'access': access_token,
             'refresh': refresh_token,
+            'user': UserSerializer(user).data
         })
     except User.DoesNotExist:
         return Response(

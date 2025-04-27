@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import authService from '../services/auth';
 
 const styles = {
   container: {
@@ -99,15 +99,10 @@ export const Login = () => {
     e.preventDefault();
     setError('');
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/auth/token/', {
-        username,
-        password
-      });
-      localStorage.setItem('access_token', response.data.access);
-      localStorage.setItem('refresh_token', response.data.refresh);
+      await authService.login({ username, password });
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Invalid credentials');
+      setError(err?.message || 'Invalid credentials');
     }
   };
 
