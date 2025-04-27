@@ -109,7 +109,7 @@ class HealthCheckView(APIView):
             )
             parameters = pika.ConnectionParameters(
                 host=getattr(settings, 'RABBITMQ_HOST', 'localhost'),
-                port=int(getattr(settings, 'RABBITMQ_PORT', 5672)),
+                port=int(getattr(settings, 'RABBITMQ_PORT', '5672')),
                 credentials=credentials,
                 socket_timeout=2
             )
@@ -122,21 +122,37 @@ class HealthCheckView(APIView):
 
         return Response(health)
 
+# Version 1 URL patterns
+v1_patterns = [
+    path('indicators/', include('indicators.urls')),
+    path('auth/', include('authentication.urls')),
+]
+
+# Version 2 URL patterns
+v2_patterns = [
+    path('indicators/', include('indicators.urls')),
+    path('auth/', include('authentication.urls')),
+]
+
 urlpatterns = [
     # Admin interface
     path('admin/', admin.site.urls),
     
-    # API endpoints
-    path('api/', include('indicators.urls')),
-    path('api/auth/', include('authentication.urls')),
+    # API endpoints with versioning
+    path('api/v1/', include((v1_patterns, 'v1'))),
+    path('api/v2/', include((v2_patterns, 'v2'))),
+    
+    # API authentication
     path('api-auth/', include('rest_framework.urls')),
     
-    # API Doc
+    # API Documentation
     path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('api/docs/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('api/schema/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     
+    # Health check
+    path('health/', HealthCheckView.as_view(), name='health_check'),
+    
     # Redirect root URL to API docs
     path('', RedirectView.as_view(url='/api/docs/', permanent=False)),
-    path('health/', HealthCheckView.as_view(), name='health_check'),
 ]

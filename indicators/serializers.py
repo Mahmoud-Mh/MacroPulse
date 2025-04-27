@@ -19,4 +19,13 @@ class IndicatorListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Indicator
         fields = ('id', 'name', 'country', 'value', 'unit', 'last_update')
-        read_only_fields = ('last_update',) 
+        read_only_fields = ('last_update',)
+
+
+class BulkIndicatorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Indicator
+        fields = ['name', 'country', 'category', 'value', 'unit', 'description', 'source', 'last_update']
+        extra_kwargs = {
+            'last_update': {'required': False}
+        } 

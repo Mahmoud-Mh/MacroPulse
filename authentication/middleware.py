@@ -90,10 +90,19 @@ class WebSocketJWTAuthMiddleware(BaseMiddleware):
 
 class TokenValidationMiddleware:
     EXEMPT_PATHS = {
-        '/api/auth/token/',
-        '/api/auth/token/refresh/',
-        '/api/auth/register/',
-        '/api/auth/logout/',
+        '/api/v1/auth/token/',
+        '/api/v1/auth/token/refresh/',
+        '/api/v1/auth/register/',
+        '/api/v1/auth/logout/',
+        '/api/v2/auth/token/',
+        '/api/v2/auth/token/refresh/',
+        '/api/v2/auth/register/',
+        '/api/v2/auth/logout/',
+        '/admin/',
+        '/api/docs/',
+        '/api/docs/redoc/',
+        '/api/schema/',
+        '/health/',
     }
 
     def __init__(self, get_response):
