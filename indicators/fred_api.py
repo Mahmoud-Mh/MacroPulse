@@ -16,8 +16,8 @@ class FREDAPI:
     async def get_series(self, series_id, observation_start=None, observation_end=None):
         """Fetch economic series data from FRED API"""
         if not observation_start:
-            # Get 10 years of data instead of just 1 year
-            observation_start = (datetime.now() - timedelta(days=3650)).strftime('%Y-%m-%d')
+            # Get 2 years of data instead of 10 years
+            observation_start = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
         if not observation_end:
             observation_end = datetime.now().strftime('%Y-%m-%d')
             
@@ -27,9 +27,7 @@ class FREDAPI:
             'series_id': series_id,
             'observation_start': observation_start,
             'observation_end': observation_end,
-            'sort_order': 'desc',  # Get newest data first
-            'realtime_start': observation_start,
-            'realtime_end': observation_end
+            'sort_order': 'desc'  # Get newest data first
         }
         
         logger.info(f"Fetching FRED series {series_id} from {observation_start} to {observation_end}")
@@ -45,12 +43,13 @@ class FREDAPI:
                 logger.debug(f"Request params: {params}")
                 
                 async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"FRED API error: {error_text}")
+                        raise Exception(f"FRED API returned status {response.status}: {error_text}")
+                        
                     response_text = await response.text()
                     logger.debug(f"Raw FRED API response: {response_text}")
-                    
-                    if response.status != 200:
-                        logger.error(f"FRED API error: {response_text}")
-                        raise Exception(f"FRED API error: {response_text}")
                     
                     try:
                         data = await response.json()
