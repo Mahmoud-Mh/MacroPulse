@@ -1,33 +1,36 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim
+# Use a more efficient base image
+FROM python:3.9-slim-bullseye
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies and clean up in one layer
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     netcat-traditional \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Install Python dependencies
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
+# Copy project files
 COPY . /app/
 
-# Make entrypoint executable
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Make entrypoint executable and create user in one layer
+RUN chmod +x /app/entrypoint.sh && \
+    useradd -m appuser && \
+    chown -R appuser /app
 
-# Create a non-root user
-RUN useradd -m appuser && chown -R appuser /app
+# Switch to non-root user
 USER appuser
 
 # Expose port
@@ -37,4 +40,4 @@ EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Command to run on container start
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "macro_pulse.wsgi:application"] 
+CMD ["celery", "-A", "macro_pulse", "worker", "-l", "INFO"] 

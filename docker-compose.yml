@@ -66,7 +66,7 @@ services:
 
   celery_worker:
     build: .
-    command: celery -A macro_pulse worker -l INFO
+    entrypoint: ["celery", "-A", "macro_pulse", "worker", "-l", "INFO"]
     volumes:
       - .:/app
     env_file:
@@ -84,7 +84,7 @@ services:
 
   celery_beat:
     build: .
-    command: celery -A macro_pulse beat -l INFO
+    entrypoint: ["celery", "-A", "macro_pulse", "beat", "-l", "INFO"]
     volumes:
       - .:/app
     env_file:
@@ -102,7 +102,7 @@ services:
 
   flower:
     build: .
-    command: celery -A macro_pulse flower
+    entrypoint: ["celery", "-A", "macro_pulse", "flower", "--port=5555"]
     ports:
       - "5555:5555"
     env_file:
@@ -113,7 +113,10 @@ services:
       - REDIS_HOST=redis
       - RABBITMQ_HOST=rabbitmq
     depends_on:
-      - celery_worker
+      - web
+      - db
+      - redis
+      - rabbitmq
 
 volumes:
   postgres_data:
