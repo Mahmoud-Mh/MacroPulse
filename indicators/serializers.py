@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Indicator
+from .models import Indicator, Task
 
 
 class IndicatorSerializer(serializers.ModelSerializer):
@@ -28,4 +28,11 @@ class BulkIndicatorSerializer(serializers.ModelSerializer):
         fields = ['name', 'country', 'category', 'value', 'unit', 'description', 'source', 'last_update']
         extra_kwargs = {
             'last_update': {'required': False}
-        } 
+        }
+
+
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['id', 'name', 'status', 'schedule', 'created_at', 'last_run']
+        read_only_fields = ['id', 'created_at', 'last_run'] 

@@ -61,8 +61,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -154,33 +154,12 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Vite dev server
     "http://127.0.0.1:5173",
-    "http://localhost:3000",  # Just in case you use a different port
 ]
-
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
-]
-
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -284,8 +263,8 @@ CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
-CELERY_BROKER_URL = f'amqp://{os.getenv("RABBITMQ_USER", "guest")}:{os.getenv("RABBITMQ_PASSWORD", "guest")}@rabbitmq:5672//'
-CELERY_RESULT_BACKEND = f'redis://{os.getenv("REDIS_HOST", "redis")}:6379/0'
+CELERY_BROKER_URL = f'amqp://{os.getenv("RABBITMQ_USER", "guest")}:{os.getenv("RABBITMQ_PASSWORD", "guest")}@localhost:5672//'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
 # Celery settings
 CELERY_ACCEPT_CONTENT = ['application/json']
@@ -295,42 +274,22 @@ CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_RESULT_EXPIRES = 60 * 60  # Results expire after 1 hour
+CELERY_SEND_EVENTS = True  # Required for monitoring tasks in Flower
+CELERY_TASK_SEND_SENT_EVENT = True  # Required for monitoring tasks in Flower
+CELERY_WORKER_SEND_TASK_EVENTS = True  # Required for monitoring tasks in Flower
+CELERY_TASK_IGNORE_RESULT = False  # Make sure task results are stored
 
 # Redis settings (for Celery results)
-REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
+REDIS_HOST = 'localhost'  # Changed from redis to localhost
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 
 # RabbitMQ settings (for Celery broker)
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+RABBITMQ_HOST = 'localhost'  # Changed from rabbitmq to localhost
 RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', 5672))
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'guest')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'guest')
 RABBITMQ_VHOST = os.getenv('RABBITMQ_VHOST', '/')
-
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in development
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
-]
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
 
 # Logging configuration
 LOGGING = {

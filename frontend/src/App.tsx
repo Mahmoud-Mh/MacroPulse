@@ -4,6 +4,7 @@ import { SignUp } from './components/SignUp';
 import { WebSocketProvider } from './components/WebSocketManager';
 import { DataVisualizer } from './components/DataVisualizer';
 import MonitoringDashboard from './components/MonitoringDashboard';
+import TaskManager from './components/TaskManager';
 import './App.css';
 
 const styles = {
@@ -74,6 +75,7 @@ function Dashboard() {
           <div style={styles.navLinks}>
             <NavLink to="/dashboard">Data Visualizer</NavLink>
             <NavLink to="/monitoring">System Status</NavLink>
+            <NavLink to="/task-manager">Task Manager</NavLink>
           </div>
         </nav>
         <div style={styles.content}>
@@ -96,6 +98,7 @@ function Monitoring() {
         <div style={styles.navLinks}>
           <NavLink to="/dashboard">Data Visualizer</NavLink>
           <NavLink to="/monitoring">System Status</NavLink>
+          <NavLink to="/task-manager">Task Manager</NavLink>
         </div>
       </nav>
       <div style={styles.content}>
@@ -113,6 +116,7 @@ export default function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/monitoring" element={<Monitoring />} />
+        <Route path="/task-manager" element={<TaskManager />} />
         <Route path="/" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>

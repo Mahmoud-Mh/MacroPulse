@@ -1,10 +1,14 @@
 from django.shortcuts import render
 from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Indicator
-from .serializers import IndicatorSerializer, IndicatorListSerializer, BulkIndicatorSerializer
+from rest_framework.permissions import IsAuthenticated
+from django_celery_beat.models import PeriodicTask, IntervalSchedule
+from .models import Indicator, Task
+from .serializers import IndicatorSerializer, IndicatorListSerializer, BulkIndicatorSerializer, TaskSerializer
+from .tasks import run_manual_task, run_scheduled_task
+import json
 
 
 class IndicatorViewSet(viewsets.ModelViewSet):
@@ -128,3 +132,124 @@ class IndicatorViewSet(viewsets.ModelViewSet):
         latest = self.get_queryset().order_by('-last_update')[:10]
         serializer = IndicatorListSerializer(latest, many=True)
         return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_tasks(request):
+    tasks = Task.objects.all().order_by('-created_at')
+    return Response(TaskSerializer(tasks, many=True).data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_task(request):
+    try:
+        data = request.data
+        name = data.get('name')
+        task_status = data.get('status', 'Active')
+        task_schedule = data.get('schedule', 'manual')
+        
+        # Create the task in our database
+        task = Task.objects.create(
+            name=name,
+            status=task_status,
+            schedule=task_schedule
+        )
+        
+        # If it's not a manual task, create a periodic task in Celery
+        if task_schedule != 'manual':
+            # Create schedule based on the selected interval
+            interval_schedule = None
+            if task_schedule == 'daily':
+                interval_schedule, _ = IntervalSchedule.objects.get_or_create(
+                    every=24,
+                    period=IntervalSchedule.HOURS,
+                )
+            elif task_schedule == 'weekly':
+                interval_schedule, _ = IntervalSchedule.objects.get_or_create(
+                    every=7,
+                    period=IntervalSchedule.DAYS,
+                )
+            elif task_schedule == 'monthly':
+                interval_schedule, _ = IntervalSchedule.objects.get_or_create(
+                    every=30,
+                    period=IntervalSchedule.DAYS,
+                )
+            
+            # Create the periodic task with interval schedule
+            PeriodicTask.objects.create(
+                interval=interval_schedule,
+                name=f"Task_{task.id}_{name}",
+                task='indicators.run_scheduled_task',
+                args=json.dumps([task.id]),
+                enabled=(task_status == 'Active')
+            )
+        else:
+            # For manual tasks, create a one-off task with an interval
+            # We set a long interval (e.g., 999 days) since it's manual
+            manual_interval, _ = IntervalSchedule.objects.get_or_create(
+                every=999,
+                period=IntervalSchedule.DAYS,
+            )
+            
+            PeriodicTask.objects.create(
+                interval=manual_interval,
+                name=f"Manual_Task_{task.id}_{name}",
+                task='indicators.run_manual_task',
+                args=json.dumps([task.id]),
+                enabled=False,  # Manual tasks are disabled by default
+                one_off=True   # This task will be removed after execution
+            )
+        
+        return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        print(f"Error creating task: {str(e)}")  # Add logging
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def run_task(request, task_id):
+    try:
+        task = Task.objects.get(id=task_id)
+        
+        if task.schedule == 'manual':
+            # Run manual task with proper tracking
+            result = run_manual_task.apply_async(
+                args=[task_id],
+                task_id=str(task_id),  # Use consistent task ID
+                track_started=True,
+                task_send_sent_event=True,
+                task_send_started_event=True,
+                task_send_received_event=True,
+                task_send_success_event=True,
+                task_send_retry_event=True,
+                task_send_failure_event=True,
+            )
+        else:
+            # Run scheduled task with proper tracking
+            result = run_scheduled_task.apply_async(
+                args=[task_id],
+                task_id=str(task_id),  # Use consistent task ID
+                track_started=True,
+                task_send_sent_event=True,
+                task_send_started_event=True,
+                task_send_received_event=True,
+                task_send_success_event=True,
+                task_send_retry_event=True,
+                task_send_failure_event=True,
+            )
+            
+        return Response({
+            'message': f'Task {task.name} started',
+            'task_id': str(result.id)  # Convert UUID to string
+        }, status=status.HTTP_200_OK)
+    except Task.DoesNotExist:
+        return Response({
+            'error': f'Task with ID {task_id} not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        import traceback
+        print(f"Error running task: {str(e)}")
+        print(traceback.format_exc())
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)

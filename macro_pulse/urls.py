@@ -19,15 +19,13 @@ import requests
 from django.conf import settings
 import redis
 import pika
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 schema_view = get_schema_view(
     openapi.Info(
         title="MacroPulse API",
         default_version='v1',
-        description="API for accessing macroeconomic indicators",
-        terms_of_service="https://www.google.com/policies/terms/",
-        contact=openapi.Contact(email="contact@example.com"),
-        license=openapi.License(name="BSD License"),
+        description="API for MacroPulse application",
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
@@ -144,6 +142,8 @@ urlpatterns = [
     
     # API authentication
     path('api-auth/', include('rest_framework.urls')),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # API Documentation
     path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

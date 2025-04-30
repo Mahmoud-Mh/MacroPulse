@@ -2,7 +2,8 @@ import logging
 from celery import shared_task
 from django.conf import settings
 from fredapi import Fred
-from .models import Indicator
+from .models import Indicator, Task
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 fred = Fred(api_key=settings.FRED_API_KEY)
@@ -103,6 +104,130 @@ def update_all_indicators():
     logger.info(f"Updated {len(INDICATORS)} indicators")
     return True
 
+@shared_task(bind=True, name='indicators.run_task')
+def run_task(self, task_id):
+    """
+    Run a task by its ID.
+    """
+    try:
+        # Update task state to STARTED
+        self.update_state(state='STARTED', meta={'task_id': task_id})
+        
+        task = Task.objects.get(id=task_id)
+        # Update last run time
+        task.last_run = timezone.now()
+        task.save()
+        
+        # Simulate some work
+        self.update_state(state='PROGRESS', meta={'task_id': task_id, 'status': 'Processing'})
+        
+        # Here you can add the actual task logic
+        result = f"Task {task.name} started"
+        
+        return {
+            'status': 'SUCCESS',
+            'task_id': task_id,
+            'message': result
+        }
+        
+    except Task.DoesNotExist:
+        self.update_state(state='FAILURE', meta={
+            'exc_type': 'Task.DoesNotExist',
+            'exc_message': f"Task with ID {task_id} not found"
+        })
+        raise
+    except Exception as e:
+        self.update_state(state='FAILURE', meta={
+            'exc_type': type(e).__name__,
+            'exc_message': str(e)
+        })
+        raise
+
 @shared_task
 def health_check_task():
-    return "ok" 
+    return "ok"
+
+@shared_task(bind=True, name='indicators.run_manual_task')
+def run_manual_task(self, task_id):
+    """
+    Run a manual task by its ID.
+    """
+    try:
+        # Update task state to STARTED
+        self.update_state(state='STARTED', meta={'task_id': task_id})
+        
+        task = Task.objects.get(id=task_id)
+        # Update last run time
+        task.last_run = timezone.now()
+        task.save()
+        
+        # Simulate some work
+        self.update_state(state='PROGRESS', meta={'task_id': task_id, 'status': 'Processing'})
+        
+        # Here you can add the actual task logic
+        result = f"Task {task.name} completed successfully"
+        
+        return {
+            'status': 'SUCCESS',
+            'task_id': task_id,
+            'message': result
+        }
+    except Task.DoesNotExist:
+        self.update_state(state='FAILURE', meta={
+            'exc_type': 'Task.DoesNotExist',
+            'exc_message': f"Task with ID {task_id} not found"
+        })
+        raise
+    except Exception as e:
+        self.update_state(state='FAILURE', meta={
+            'exc_type': type(e).__name__,
+            'exc_message': str(e)
+        })
+        raise
+
+@shared_task(bind=True, name='indicators.run_scheduled_task')
+def run_scheduled_task(self, task_id):
+    """
+    Run a scheduled task by its ID.
+    """
+    try:
+        # Update task state to STARTED
+        self.update_state(state='STARTED', meta={'task_id': task_id})
+        
+        task = Task.objects.get(id=task_id)
+        if task.status == 'Active':
+            # Update last run time
+            task.last_run = timezone.now()
+            task.save()
+            
+            # Simulate some work
+            self.update_state(state='PROGRESS', meta={'task_id': task_id, 'status': 'Processing'})
+            
+            result = f"Scheduled task {task.name} completed successfully"
+            return {
+                'status': 'SUCCESS',
+                'task_id': task_id,
+                'message': result
+            }
+            
+        self.update_state(state='IGNORED', meta={
+            'task_id': task_id,
+            'message': f"Task {task.name} is inactive"
+        })
+        return {
+            'status': 'IGNORED',
+            'task_id': task_id,
+            'message': f"Task {task.name} is inactive"
+        }
+    except Task.DoesNotExist:
+        self.update_state(state='FAILURE', meta={
+            'exc_type': 'Task.DoesNotExist',
+            'exc_message': f"Task with ID {task_id} not found"
+        })
+        raise
+    except Exception as e:
+        self.update_state(state='FAILURE', meta={
+            'exc_type': type(e).__name__,
+            'exc_message': str(e)
+        })
+        raise 

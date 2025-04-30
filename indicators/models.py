@@ -63,3 +63,25 @@ class Indicator(models.Model):
             old_record = Indicator.objects.get(pk=self.pk)
             self.previous_value = old_record.value
         super().save(*args, **kwargs)
+
+class Task(models.Model):
+    STATUS_CHOICES = [
+        ('Active', 'Active'),
+        ('Inactive', 'Inactive'),
+    ]
+    
+    SCHEDULE_CHOICES = [
+        ('manual', 'Manual'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+    
+    name = models.CharField(max_length=255)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Active')
+    schedule = models.CharField(max_length=10, choices=SCHEDULE_CHOICES, default='manual')
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_run = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.name} ({self.status})"
