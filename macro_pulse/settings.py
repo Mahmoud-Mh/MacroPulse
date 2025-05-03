@@ -312,6 +312,11 @@ LOGGING = {
             'filename': 'security.log',
             'formatter': 'verbose',
         },
+        'celery': {
+            'class': 'logging.FileHandler',
+            'filename': 'celery.log',
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'django.security': {
@@ -322,6 +327,16 @@ LOGGING = {
         'authentication': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
+            'propagate': True,
+        },
+        'celery': {
+            'handlers': ['console', 'celery'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'indicators.tasks': {
+            'handlers': ['console', 'celery'],
+            'level': 'DEBUG',
             'propagate': True,
         },
     },

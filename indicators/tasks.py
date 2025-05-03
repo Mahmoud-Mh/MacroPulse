@@ -153,14 +153,19 @@ def run_manual_task(self, task_id):
     """
     Run a manual task by its ID.
     """
+    logger.info(f"Starting manual task execution for task_id: {task_id}")
     try:
         # Update task state to STARTED
         self.update_state(state='STARTED', meta={'task_id': task_id})
+        logger.debug(f"Task {task_id} state set to STARTED")
         
         task = Task.objects.get(id=task_id)
+        logger.info(f"Found task: {task.name} (ID: {task_id})")
+        
         # Update last run time with timezone-aware datetime
         task.last_run = timezone.now()
         task.save(update_fields=['last_run'])
+        logger.debug(f"Updated last_run time for task {task_id}")
         
         # Simulate some work
         self.update_state(state='PROGRESS', meta={
@@ -168,12 +173,15 @@ def run_manual_task(self, task_id):
             'status': 'Processing',
             'last_run': task.last_run.isoformat()
         })
+        logger.debug(f"Task {task_id} state set to PROGRESS")
         
         # Here you can add the actual task logic
         result = f"Task {task.name} completed successfully"
+        logger.info(result)
         
         # Refresh task to ensure we have the latest data
         task.refresh_from_db()
+        logger.debug(f"Task {task_id} refreshed from database")
         
         return {
             'status': 'SUCCESS',
@@ -182,12 +190,16 @@ def run_manual_task(self, task_id):
             'last_run': task.last_run.isoformat()
         }
     except Task.DoesNotExist:
+        error_msg = f"Task with ID {task_id} not found"
+        logger.error(error_msg)
         self.update_state(state='FAILURE', meta={
             'exc_type': 'Task.DoesNotExist',
-            'exc_message': f"Task with ID {task_id} not found"
+            'exc_message': error_msg
         })
         raise
     except Exception as e:
+        error_msg = f"Error executing task {task_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)  # Include full traceback
         self.update_state(state='FAILURE', meta={
             'exc_type': type(e).__name__,
             'exc_message': str(e)
@@ -199,15 +211,20 @@ def run_scheduled_task(self, task_id):
     """
     Run a scheduled task by its ID.
     """
+    logger.info(f"Starting scheduled task execution for task_id: {task_id}")
     try:
         # Update task state to STARTED
         self.update_state(state='STARTED', meta={'task_id': task_id})
+        logger.debug(f"Task {task_id} state set to STARTED")
         
         task = Task.objects.get(id=task_id)
+        logger.info(f"Found task: {task.name} (ID: {task_id}, Status: {task.status})")
+        
         if task.status == 'Active':
             # Update last run time with timezone-aware datetime
             task.last_run = timezone.now()
             task.save(update_fields=['last_run'])
+            logger.debug(f"Updated last_run time for task {task_id}")
             
             # Simulate some work
             self.update_state(state='PROGRESS', meta={
@@ -215,12 +232,15 @@ def run_scheduled_task(self, task_id):
                 'status': 'Processing',
                 'last_run': task.last_run.isoformat()
             })
+            logger.debug(f"Task {task_id} state set to PROGRESS")
             
             # Here you can add the actual task logic
             result = f"Scheduled task {task.name} completed successfully"
+            logger.info(result)
             
             # Refresh task to ensure we have the latest data
             task.refresh_from_db()
+            logger.debug(f"Task {task_id} refreshed from database")
             
             return {
                 'status': 'SUCCESS',
@@ -228,7 +248,8 @@ def run_scheduled_task(self, task_id):
                 'message': result,
                 'last_run': task.last_run.isoformat()
             }
-            
+        
+        logger.info(f"Task {task_id} ({task.name}) is inactive, skipping execution")
         self.update_state(state='IGNORED', meta={
             'task_id': task_id,
             'message': f"Task {task.name} is inactive"
@@ -239,12 +260,16 @@ def run_scheduled_task(self, task_id):
             'message': f"Task {task.name} is inactive"
         }
     except Task.DoesNotExist:
+        error_msg = f"Task with ID {task_id} not found"
+        logger.error(error_msg)
         self.update_state(state='FAILURE', meta={
             'exc_type': 'Task.DoesNotExist',
-            'exc_message': f"Task with ID {task_id} not found"
+            'exc_message': error_msg
         })
         raise
     except Exception as e:
+        error_msg = f"Error executing task {task_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)  # Include full traceback
         self.update_state(state='FAILURE', meta={
             'exc_type': type(e).__name__,
             'exc_message': str(e)

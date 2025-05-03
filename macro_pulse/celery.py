@@ -1,6 +1,7 @@
 import os
 from celery import Celery
 from celery.schedules import crontab
+from django.conf import settings
 
 
 # Set the default Django settings module for the 'celery' program.
@@ -15,9 +16,14 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
 
+# Get Redis settings from Django settings (which reads from env vars)
+redis_host = getattr(settings, 'REDIS_HOST', 'localhost')
+redis_port = getattr(settings, 'REDIS_PORT', 6379)
+redis_db = getattr(settings, 'REDIS_DB', 0)
+
 # Configure Celery to use Redis as the result backend and enable task tracking
 app.conf.update(
-    result_backend='redis://localhost:6379/0',
+    result_backend=f'redis://{redis_host}:{redis_port}/{redis_db}',
     task_track_started=True,
     task_time_limit=30 * 60,  # 30 minutes
     worker_prefetch_multiplier=1,  # Disable prefetching for better task distribution
