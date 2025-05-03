@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Get API base URL from environment variable or use default
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const axiosInstance = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/v1',
+  baseURL: `${API_URL}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -38,8 +41,8 @@ axiosInstance.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
-        // Try to refresh the token
-        const response = await axios.post('http://127.0.0.1:8000/api/v1/auth/token/refresh/', {
+        // Try to refresh the token using the same API_URL
+        const response = await axios.post(`${API_URL}/api/v1/auth/token/refresh/`, {
           refresh: refreshToken
         });
         

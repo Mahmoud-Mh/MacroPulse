@@ -3,12 +3,13 @@ import Card from 'react-bootstrap/Card';
 import Table from 'react-bootstrap/Table';
 import Button from 'react-bootstrap/Button';
 import { Navigate, Link, useLocation } from 'react-router-dom';
+import { format, parseISO } from 'date-fns';
 
 interface Task {
   id: number;
   name: string;
   status: string;
-  lastRun: string;
+  last_run: string;
 }
 
 const styles = {
@@ -203,19 +204,18 @@ const TaskManager: React.FC = () => {
 
   const fetchTasks = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/indicators/indicators/tasks/`, {
+      const response = await fetch(`${API_URL}/api/v1/indicators/tasks/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        mode: 'cors',
       });
       
       if (response.status === 401) {
         // Token expired, try to refresh
         try {
-          const refreshResponse = await fetch(`${API_URL}/auth/token/refresh/`, {
+          const refreshResponse = await fetch(`${API_URL}/api/v1/auth/token/refresh/`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -224,7 +224,6 @@ const TaskManager: React.FC = () => {
               refresh: localStorage.getItem('refresh_token'),
             }),
             credentials: 'include',
-            mode: 'cors',
           });
 
           if (!refreshResponse.ok) {
@@ -235,13 +234,12 @@ const TaskManager: React.FC = () => {
           localStorage.setItem('access_token', access);
 
           // Retry the original request with new token
-          const retryResponse = await fetch(`${API_URL}/api/v1/indicators/indicators/tasks/`, {
+          const retryResponse = await fetch(`${API_URL}/api/v1/indicators/tasks/`, {
             headers: {
               'Authorization': `Bearer ${access}`,
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            mode: 'cors',
           });
 
           if (!retryResponse.ok) {
@@ -278,7 +276,7 @@ const TaskManager: React.FC = () => {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/v1/indicators/indicators/tasks/create/`, {
+      const response = await fetch(`${API_URL}/api/v1/indicators/tasks/create/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -304,13 +302,101 @@ const TaskManager: React.FC = () => {
 
   const handleRunTask = async (taskId: number) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/indicators/indicators/tasks/${taskId}/run/`, {
+      const response = await fetch(`${API_URL}/api/v1/indicators/tasks/${taskId}/run/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
+
+      if (response.status === 401) {
+        // Token expired, try to refresh
+        try {
+          const refreshResponse = await fetch(`${API_URL}/api/v1/auth/token/refresh/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              refresh: localStorage.getItem('refresh_token'),
+            }),
+            credentials: 'include',
+          });
+
+          if (!refreshResponse.ok) {
+            throw new Error('Token refresh failed');
+          }
+
+          const { access } = await refreshResponse.json();
+          localStorage.setItem('access_token', access);
+
+          // Retry the run request with new token
+          const retryResponse = await fetch(`${API_URL}/api/v1/indicators/tasks/${taskId}/run/`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${access}`,
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error('Failed to run task after token refresh');
+          }
+
+          const result = await retryResponse.json();
+          console.log('Task execution started:', result);
+          
+          // Update the task's last run time in the local state
+          if (result.last_run) {
+            setTasks(prevTasks => prevTasks.map(task => 
+              task.id === taskId 
+                ? { ...task, last_run: result.last_run } 
+                : task
+            ));
+          }
+
+          // Poll for task completion and update last run time
+          const pollInterval = setInterval(async () => {
+            try {
+              const taskResponse = await fetch(`${API_URL}/api/v1/indicators/tasks/`, {
+                headers: {
+                  'Authorization': `Bearer ${access}`,
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+              });
+              
+              if (taskResponse.ok) {
+                const tasks = await taskResponse.json();
+                const updatedTask = tasks.find((t: Task) => t.id === taskId);
+                if (updatedTask && updatedTask.last_run) {
+                  setTasks(prevTasks => prevTasks.map(task => 
+                    task.id === taskId ? updatedTask : task
+                  ));
+                  clearInterval(pollInterval);
+                }
+              }
+            } catch (error) {
+              console.error('Error polling task status:', error);
+              clearInterval(pollInterval);
+            }
+          }, 2000); // Poll every 2 seconds
+
+          // Clear polling after 30 seconds to prevent infinite polling
+          setTimeout(() => clearInterval(pollInterval), 30000);
+          
+          return;
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          window.location.href = '/login';
+          return;
+        }
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -320,11 +406,148 @@ const TaskManager: React.FC = () => {
       const result = await response.json();
       console.log('Task execution started:', result);
       
-      // Refresh the task list to update last run time
-      fetchTasks();
+      // Update the task's last run time in the local state
+      if (result.last_run) {
+        setTasks(prevTasks => prevTasks.map(task => 
+          task.id === taskId 
+            ? { ...task, last_run: result.last_run } 
+            : task
+        ));
+      }
+
+      // Poll for task completion and update last run time
+      const pollInterval = setInterval(async () => {
+        try {
+          const taskResponse = await fetch(`${API_URL}/api/v1/indicators/tasks/`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+          });
+          
+          if (taskResponse.ok) {
+            const tasks = await taskResponse.json();
+            const updatedTask = tasks.find((t: Task) => t.id === taskId);
+            if (updatedTask && updatedTask.last_run) {
+              setTasks(prevTasks => prevTasks.map(task => 
+                task.id === taskId ? updatedTask : task
+              ));
+              clearInterval(pollInterval);
+            }
+          }
+        } catch (error) {
+          console.error('Error polling task status:', error);
+          clearInterval(pollInterval);
+        }
+      }, 2000); // Poll every 2 seconds
+
+      // Clear polling after 30 seconds to prevent infinite polling
+      setTimeout(() => clearInterval(pollInterval), 30000);
+      
     } catch (error) {
       console.error('Error running task:', error);
       alert(error instanceof Error ? error.message : 'Failed to run task');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: number) => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/indicators/tasks/${taskId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (response.status === 401) {
+        // Token expired, try to refresh
+        try {
+          const refreshResponse = await fetch(`${API_URL}/api/v1/auth/token/refresh/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              refresh: localStorage.getItem('refresh_token'),
+            }),
+            credentials: 'include',
+          });
+
+          if (!refreshResponse.ok) {
+            throw new Error('Token refresh failed');
+          }
+
+          const { access } = await refreshResponse.json();
+          localStorage.setItem('access_token', access);
+
+          // Retry the delete request with new token
+          const retryResponse = await fetch(`${API_URL}/api/v1/indicators/tasks/${taskId}/`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${access}`,
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error('Failed to delete task after token refresh');
+          }
+
+          // Remove the task from the local state
+          setTasks(tasks.filter(task => task.id !== taskId));
+          return;
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          window.location.href = '/login';
+          return;
+        }
+      }
+
+      // Handle 204 No Content and other successful responses
+      if (response.ok) {
+        // Remove the task from the local state
+        setTasks(tasks.filter(task => task.id !== taskId));
+        return;
+      }
+
+      if (response.status === 204) {
+        // No content response, task was deleted successfully
+        setTasks(tasks.filter(task => task.id !== taskId));
+        return;
+      }
+
+      // For other non-successful responses, try to parse the error
+      let errorText = '';
+      try {
+        // Try parsing as JSON first
+        const errorData = await response.json();
+        errorText = errorData.error || errorData.detail || JSON.stringify(errorData);
+      } catch (e) {
+        // If not JSON, get as text
+        errorText = await response.text() || `Error: HTTP ${response.status}`;
+      }
+
+      throw new Error(errorText);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete task');
+    }
+  };
+
+  const formatLastRun = (lastRun: string | null) => {
+    if (!lastRun) return 'Never';
+    try {
+      const date = parseISO(lastRun);
+      return format(date, 'yyyy-MM-dd HH:mm:ss');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Never';
     }
   };
 
@@ -412,7 +635,9 @@ const TaskManager: React.FC = () => {
                     <td style={{...styles.tableCell, ...(task.status === 'Active' ? styles.statusActive : styles.statusInactive)}}>
                       {task.status}
                     </td>
-                    <td style={styles.tableCell}>{task.lastRun}</td>
+                    <td style={styles.tableCell}>
+                      {formatLastRun(task.last_run)}
+                    </td>
                     <td style={styles.tableCell}>
                       <Button 
                         style={styles.buttonRun} 
@@ -422,7 +647,11 @@ const TaskManager: React.FC = () => {
                       >
                         Run
                       </Button>
-                      <Button style={styles.buttonDelete} size="sm">
+                      <Button 
+                        style={styles.buttonDelete} 
+                        size="sm"
+                        onClick={() => handleDeleteTask(task.id)}
+                      >
                         Delete
                       </Button>
                     </td>

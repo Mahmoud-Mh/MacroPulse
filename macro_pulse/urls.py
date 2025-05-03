@@ -20,6 +20,9 @@ from django.conf import settings
 import redis
 import pika
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from django.http import HttpResponse
+
+# Using our custom CorsMiddleware from settings.py instead of these functions
 
 schema_view = get_schema_view(
     openapi.Info(

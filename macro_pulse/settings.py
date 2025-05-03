@@ -60,8 +60,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'macro_pulse.cors_middleware.CorsMiddleware',  # Our custom CORS middleware must be first
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -153,10 +153,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS settings
+# Remove CORS settings and let our middleware handle it all
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite dev server
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 CORS_ALLOW_CREDENTIALS = True
@@ -263,8 +263,8 @@ CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
-CELERY_BROKER_URL = f'amqp://{os.getenv("RABBITMQ_USER", "guest")}:{os.getenv("RABBITMQ_PASSWORD", "guest")}@localhost:5672//'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = f'amqp://{os.getenv("RABBITMQ_USER", "guest")}:{os.getenv("RABBITMQ_PASSWORD", "guest")}@{os.getenv("RABBITMQ_HOST", "localhost")}:{os.getenv("RABBITMQ_PORT", "5672")}//'
+CELERY_RESULT_BACKEND = f'redis://{os.getenv("REDIS_HOST", "localhost")}:{os.getenv("REDIS_PORT", "6379")}/0'
 
 # Celery settings
 CELERY_ACCEPT_CONTENT = ['application/json']
@@ -278,14 +278,15 @@ CELERY_SEND_EVENTS = True  # Required for monitoring tasks in Flower
 CELERY_TASK_SEND_SENT_EVENT = True  # Required for monitoring tasks in Flower
 CELERY_WORKER_SEND_TASK_EVENTS = True  # Required for monitoring tasks in Flower
 CELERY_TASK_IGNORE_RESULT = False  # Make sure task results are stored
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Retry connections on startup
 
 # Redis settings (for Celery results)
-REDIS_HOST = 'localhost'  # Changed from redis to localhost
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 
 # RabbitMQ settings (for Celery broker)
-RABBITMQ_HOST = 'localhost'  # Changed from rabbitmq to localhost
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
 RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', 5672))
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'guest')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'guest')

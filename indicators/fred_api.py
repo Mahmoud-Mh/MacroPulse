@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class FREDAPI:
     def __init__(self):
-        self.api_key = settings.FRED_API_KEY.strip()  # Remove any whitespace
+        self.api_key = settings.FRED_API_KEY.strip()  
         if not self._validate_api_key(self.api_key):
             logger.error("Invalid FRED API key format")
             raise ValueError("Invalid FRED API key format. Key must be a 32 character alphanumeric lowercase string.")

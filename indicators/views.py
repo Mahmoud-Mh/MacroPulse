@@ -238,9 +238,13 @@ def run_task(request, task_id):
                 task_send_failure_event=True,
             )
             
+        # Refresh the task to get updated last_run time
+        task.refresh_from_db()
+            
         return Response({
             'message': f'Task {task.name} started',
-            'task_id': str(result.id)  # Convert UUID to string
+            'task_id': str(result.id),  # Convert UUID to string
+            'last_run': task.last_run.isoformat() if task.last_run else None
         }, status=status.HTTP_200_OK)
     except Task.DoesNotExist:
         return Response({
@@ -250,6 +254,36 @@ def run_task(request, task_id):
         import traceback
         print(f"Error running task: {str(e)}")
         print(traceback.format_exc())
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_task(request, task_id):
+    try:
+        task = Task.objects.get(id=task_id)
+        
+        # Delete associated periodic task if it exists
+        try:
+            periodic_task = PeriodicTask.objects.get(
+                name__in=[f"Task_{task.id}_{task.name}", f"Manual_Task_{task.id}_{task.name}"]
+            )
+            periodic_task.delete()
+        except PeriodicTask.DoesNotExist:
+            pass  # No periodic task found, which is fine
+        
+        # Delete the task itself
+        task.delete()
+        
+        return Response({
+            'message': f'Task {task.name} deleted successfully'
+        }, status=status.HTTP_200_OK)
+    except Task.DoesNotExist:
+        return Response({
+            'error': f'Task with ID {task_id} not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
         return Response({
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)

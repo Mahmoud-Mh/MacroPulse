@@ -116,7 +116,7 @@ def run_task(self, task_id):
         task = Task.objects.get(id=task_id)
         # Update last run time
         task.last_run = timezone.now()
-        task.save()
+        task.save(update_fields=['last_run'])
         
         # Simulate some work
         self.update_state(state='PROGRESS', meta={'task_id': task_id, 'status': 'Processing'})
@@ -127,7 +127,8 @@ def run_task(self, task_id):
         return {
             'status': 'SUCCESS',
             'task_id': task_id,
-            'message': result
+            'message': result,
+            'last_run': task.last_run.isoformat()
         }
         
     except Task.DoesNotExist:
@@ -157,20 +158,28 @@ def run_manual_task(self, task_id):
         self.update_state(state='STARTED', meta={'task_id': task_id})
         
         task = Task.objects.get(id=task_id)
-        # Update last run time
+        # Update last run time with timezone-aware datetime
         task.last_run = timezone.now()
-        task.save()
+        task.save(update_fields=['last_run'])
         
         # Simulate some work
-        self.update_state(state='PROGRESS', meta={'task_id': task_id, 'status': 'Processing'})
+        self.update_state(state='PROGRESS', meta={
+            'task_id': task_id, 
+            'status': 'Processing',
+            'last_run': task.last_run.isoformat()
+        })
         
         # Here you can add the actual task logic
         result = f"Task {task.name} completed successfully"
         
+        # Refresh task to ensure we have the latest data
+        task.refresh_from_db()
+        
         return {
             'status': 'SUCCESS',
             'task_id': task_id,
-            'message': result
+            'message': result,
+            'last_run': task.last_run.isoformat()
         }
     except Task.DoesNotExist:
         self.update_state(state='FAILURE', meta={
@@ -196,18 +205,28 @@ def run_scheduled_task(self, task_id):
         
         task = Task.objects.get(id=task_id)
         if task.status == 'Active':
-            # Update last run time
+            # Update last run time with timezone-aware datetime
             task.last_run = timezone.now()
-            task.save()
+            task.save(update_fields=['last_run'])
             
             # Simulate some work
-            self.update_state(state='PROGRESS', meta={'task_id': task_id, 'status': 'Processing'})
+            self.update_state(state='PROGRESS', meta={
+                'task_id': task_id, 
+                'status': 'Processing',
+                'last_run': task.last_run.isoformat()
+            })
             
+            # Here you can add the actual task logic
             result = f"Scheduled task {task.name} completed successfully"
+            
+            # Refresh task to ensure we have the latest data
+            task.refresh_from_db()
+            
             return {
                 'status': 'SUCCESS',
                 'task_id': task_id,
-                'message': result
+                'message': result,
+                'last_run': task.last_run.isoformat()
             }
             
         self.update_state(state='IGNORED', meta={
